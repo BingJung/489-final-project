@@ -14,6 +14,7 @@ class VAT:
         self.data = get_dataset(dataset.upper() + "_filtered")
         self.errors = []
         
+        # get input and latent dimensions
         dim_map = lambda x : ceil(x / log(x))
         self.entity_dim = self.data.entity_num
         self.relation_dim = self.data.relation_num
@@ -53,7 +54,7 @@ class VAT:
 
         # start training
         self.errors = []
-        with open('errors.tmp', 'w') as file: # clear temporary error record
+        with open(f'VAT_{self.data_name}_errors.tmp', 'w') as file: # clear temporary error record
             pass
         for round in range(epochs):
             # total_error = {"encoder": 0, "decoder": 0, "noise_gen": 0}
@@ -126,7 +127,7 @@ class VAT:
                         self.relation_noise.update_weight_changes()
 
                 # update weights if reaching batch size
-                if (num+1) % batch_size == 0:
+                if (num+1) % batch_size == 0 or num == self.data.train_num - 1:
                     self.entity_encoder.update_weights()
                     self.entity_decoder.update_weights()
                     self.entity_noise.update_weights()
@@ -137,22 +138,14 @@ class VAT:
                     batch_errors.append(batch_error)
 
                     # save batch error and reset
-                    with open('errors.tmp', 'a') as file:
+                    with open(f'VAT_{self.data_name}_errors.tmp', 'a') as file:
                         file.write(str(batch_error) + ', ')
                     batch_error = 0
                     
 
-            ### at the end of each epochs:                    
-            # update weights for the rest data
-            self.entity_encoder.update_weights()
-            self.entity_decoder.update_weights()
-            self.entity_noise.update_weights()
-            self.relation_encoder.update_weights()
-            self.relation_decoder.update_weights()
-            self.relation_noise.update_weights()
-
+            ### at the end of each epoch:                    
             # create new line in error.tmp
-            with open('errors.tmp', 'a') as file:
+            with open(f'VAT_{self.data_name}_errors.tmp', 'a') as file:
                 file.write('\n')
 
             # refresh process bar
@@ -172,8 +165,8 @@ class VAT:
                 save_dir = os.path.join(os.path.dirname(__file__), 'checkpoints')
                 os.makedirs(save_dir, exist_ok=True)
 
-                save_name = f'./checkpoints/{self.data_name}-lr{lr}-momen{momentum}-{epochs}.pkl'
-                previous_name = f'./checkpoints/{self.data_name}-lr{lr}-momen{momentum}-{epochs-1}.pkl'
+                save_name = f'./checkpoints/VAT_{self.data_name}-lr{lr}-momen{momentum}-{epochs}.pkl'
+                previous_name = f'./checkpoints/VAT_{self.data_name}-lr{lr}-momen{momentum}-{epochs-1}.pkl'
                 if os.path.exists(os.path.join(save_dir, previous_name)):
                     os.remove(os.path.join(save_dir, previous_name))
                 with open(os.path.join(save_dir, save_name), 'wb') as file:
