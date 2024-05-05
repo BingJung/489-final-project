@@ -123,7 +123,6 @@ def get_dims(input_dim: int, output_dim: int, layer_num: int) -> Sequence:
     automatically calculate dimension of each layer given
     input dimension, output dimension, and number of layers
     '''
-    assert input_dim > output_dim, "Input dimension has to be larger than the output dimension."
     total_dim_difference = input_dim - output_dim
 
     unit_diff = ceil(total_dim_difference / sum([i+1 for i in range(layer_num)]))
