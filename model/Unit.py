@@ -1,12 +1,16 @@
 from math import exp
 
 class Unit:
-    def __init__(self) -> None:
+    def __init__(self, layer_size = None, next_layer_size = None) -> None:
         self.input = 0.0
         self.activation = 0.0
         self.error = 0
         self.incoming_connections = []
         self.outgoing_connections = []
+
+        # not used for now
+        self.layer_size = layer_size
+        self.next_layer_size = next_layer_size
 
     # question: how to enable class constraint here and avoid circular import
     def add_connection(self, connection):
@@ -41,7 +45,8 @@ class Unit:
 
     def update_activation(self) -> bool:
         # print("unit input:", self.input, "unit activation:", orig)
-        self.activation = 1 / (1 + exp(-self.input))
+        # self.activation = 1 / (1 + exp(-self.input))
+        self.activation = 1 / (1 + exp(-self.input)) # Leaky ReLU
         return self.activation
     
     def set_activation(self, activation):

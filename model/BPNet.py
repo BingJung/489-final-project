@@ -6,13 +6,15 @@ from typing import Sequence
 from itertools import product, pairwise # "pairwise" requires python 3.10 or later
 
 class BPNet:
-    def __init__(self, units_nums: Sequence, learning_rate = 0.01, momentum = 0) -> None:
+    def __init__(self, units_nums: list, learning_rate = 0.01, momentum = 0) -> None:
         '''
         input: units_nums - a list specifying number of units in each layer of the network;
                             length of the list will be the number of layeres of the network
                             e.g. [2, 4, 8, 16]
         '''
-        self.units = [[Unit() for _ in range(num)] for num in units_nums]
+        units_nums.append(None)
+        self.units = [[Unit(num, units_nums[i+1]) for _ in range(num)] for i, num in enumerate(units_nums[:-1])]
+        units_nums = units_nums[:-1]
         self.layer_num = len(units_nums) - 1
         self.unit_nums = units_nums
         self.learning_rate = learning_rate
@@ -20,7 +22,7 @@ class BPNet:
         self.Gs = [] # global errors; only modified by train_until_settle
 
         # build connections and add to units
-        self.connections_forward = [{f"({unit1}, {unit2})" : Connection(self.units[layer][unit1], self.units[layer+1][unit2]) for unit1, unit2 in product(range(units_nums[layer]), range(units_nums[layer+1]))} for layer in range(self.layer_num)]
+        self.connections_forward = [{f"({unit1}, {unit2})" : Connection(self.units[layer][unit1], self.units[layer+1][unit2], units_nums[layer]) for unit1, unit2 in product(range(units_nums[layer]), range(units_nums[layer+1]))} for layer in range(self.layer_num)]
         # connection is a list of dictionaries each of which refers to a layer
 
         for layer1, layer2 in pairwise(range(self.layer_num + 1)):
@@ -58,19 +60,22 @@ class BPNet:
         target - the expected result of the network
         result (optional) - the result to compute error with
         '''
-        assert len(target) == self.unit_nums[-1], f"target size is supposed to be {self.unit_nums[-1]}"
+        assert len(target) == self.unit_nums[-1], f"target size is supposed to be {self.unit_nums[-1]} rather than {len(target)}"
         if result != None:
-            assert len(result) == self.unit_nums[-1], f"result size is supposed to be {self.unit_nums[-1]}"
+            assert len(result) == self.unit_nums[-1], f"result size is supposed to be {self.unit_nums[-1]} rather than {len(result)}"
             self.set_output(result)
+        global_error = 0
 
         # update errors in the last layer
         for id, unit in enumerate(self.units[-1]):
-            unit.update_unit_error(target[id])
+            global_error += unit.update_unit_error(target[id])
 
         # back propagates errors
         for layer in reversed(self.units[:-1]):
             for unit in layer:
-                unit.sum_forward_error()
+                global_error += unit.sum_forward_error()
+        
+        return global_error
 
     def update_weight_changes(self):
         '''

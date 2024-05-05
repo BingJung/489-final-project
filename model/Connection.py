@@ -1,16 +1,25 @@
 from .Unit import Unit
 
 import random
+from math import sqrt
 
 class Connection:
     # allowing unknown input units for construction
-    def __init__(self, sender: Unit = None, recipient: Unit = None, weight = None):
+    def __init__(
+            self, 
+            sender: Unit = None, 
+            recipient: Unit = None, 
+            input_num: int = None, 
+            output_num: int = None
+            ):
         self.sender = sender
         self.recipient = recipient
-        if weight == None:
+        if input_num == None:
             self.weight = random.random()
-        else: 
-            self.weight = weight
+        else: # kaiming initialization (without which complicated optimization won't work at all...fantastic)
+            self.weight = random.normalvariate(0, sqrt(2 / input_num))
+        self.input_num = input_num
+        self.ouput_num = output_num
         self.weight_change = 0
 
     def set_recipient(self, unit):

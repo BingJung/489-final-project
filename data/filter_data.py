@@ -4,6 +4,8 @@ from tqdm import tqdm
 import fire # this package needs to be installed
 
 def main(dataset: str, entity_num: int):
+    print(f"start filtering {dataset}")
+    
     # make directories
     dataset = dataset.upper()
     orig_dir = join('.', dataset)
