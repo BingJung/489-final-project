@@ -1,43 +1,63 @@
-import os
+import os, json
+from os.path import join
 
 class KnowledgeBase:
     def __init__(self, kb_dir: str) -> None:
         assert os.path.exists(kb_dir), f'Path "{kb_dir}" doesn\'t exists.'
         self.dir = kb_dir # absolute path to the dataset
 
-        with open(os.path.join(self.dir, 'entity2id.txt'), 'r') as file:
+        with open(join(self.dir, 'entity2id.txt'), 'r') as file:
             self.entity_num = eval(file.readline())
-        with open(os.path.join(self.dir, 'relation2id.txt'), 'r') as file:
+        with open(join(self.dir, 'relation2id.txt'), 'r') as file:
             self.relation_num = eval(file.readline())
-        with open(os.path.join(self.dir, 'train2id.txt'), 'r') as file:
+        with open(join(self.dir, 'train2id.txt'), 'r') as file:
             self.train_num = eval(file.readline())
-        with open(os.path.join(self.dir, 'test2id.txt'), 'r') as file:
+        with open(join(self.dir, 'test2id.txt'), 'r') as file:
             self.test_num = eval(file.readline())
-        with open(os.path.join(self.dir, 'valid2id.txt'), 'r') as file:
+        with open(join(self.dir, 'valid2id.txt'), 'r') as file:
             self.valid_num = eval(file.readline())
 
+        if os.path.exists(join(kb_dir, 'relation_map.json')):
+            with open(join(kb_dir, 'relation_map.json'), 'r') as file:
+                self.relation_map = json.load(file)
+        else:
+            self.relation_map = None
+
     def train_data(self):
-        with open(os.path.join(self.dir, 'train2id.txt'), 'r') as file:
+        '''
+        return single data sample once
+        format: [h, t, r]
+        '''
+        with open(join(self.dir, 'train2id.txt'), 'r') as file:
             file.readline() # skip the first line which says size of data
             for line in file.readlines():
-                yield [eval(i) for i in line.split()]
+                triple = [eval(i) for i in line.split()]
+                if self.relation_map is not None:
+                    triple[-1] = self.relation_map[str(triple[-1])]
+                yield triple
 
     def test_data(self):
-        with open(os.path.join(self.dir, 'test2id.txt'), 'r') as file:
+        with open(join(self.dir, 'test2id.txt'), 'r') as file:
             file.readline() # skip the first line which says size of data
             for line in file.readlines():
-                yield [eval(i) for i in line.split()]
+                triple = [eval(i) for i in line.split()]
+                if self.relation_map is not None:
+                    triple[-1] = self.relation_map[str(triple[-1])]
+                yield triple
 
     def valid_data(self):
-        with open(os.path.join(self.dir, 'valid2id.txt'), 'r') as file:
+        with open(join(self.dir, 'valid2id.txt'), 'r') as file:
             file.readline() # skip the first line which says size of data
             for line in file.readlines():
-                yield [eval(i) for i in line.split()]
+                triple = [eval(i) for i in line.split()]
+                if self.relation_map is not None:
+                    triple[-1] = self.relation_map[str(triple[-1])]
+                yield triple
 
 def get_dataset(data_name):
     # get absolute path of the dataset
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(current_dir, data_name)
+    data_dir = join(current_dir, data_name)
 
     return KnowledgeBase(data_dir)    
 

@@ -127,7 +127,7 @@ class BPNet:
         # load weights
         for layer in range(length):
             for i, key in enumerate(self.connections_forward[layer]):
-                self.connections_forward[layer][key] = weights[layer][i]
+                self.connections_forward[layer][key].set_weight(weights[layer][i])
 
     def init(self):
         for conns in self.connections_forward.values():

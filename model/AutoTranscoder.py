@@ -1,4 +1,4 @@
-import sys, os, pickle
+import sys, os, pickle, re
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data import get_dataset
 from .BPNet import BPNet
@@ -13,6 +13,8 @@ class VAT:
         self.data_name = dataset
         self.data = get_dataset(dataset.upper() + "_filtered")
         self.errors = []
+        self.epochs = 0
+        self.best = (0, 10000)
         
         # get input and latent dimensions
         dim_map = lambda x : ceil(x / log(x))
@@ -37,11 +39,13 @@ class VAT:
         print("done initialization.")
 
 
-    def train(self, epochs=100, batch_size=20, lr=0.005, momentum=0.01, save=False):
+    def train(self, epochs=100, batch_size=25, lr=0.01, momentum=0, save=False):
         '''
         training for mixed prediction
         '''
+        assert epochs > self.epochs, f"this model is already at epoch {self.epochs}"
         print("start training.")
+        
         # set learning rates and momentums
         self.entity_encoder.set_learning_rate(lr)
         self.entity_decoder.set_learning_rate(lr)
@@ -53,21 +57,28 @@ class VAT:
         self.relation_decoder.set_momentum(momentum)
 
         # start training
+        save_dir = os.path.join(os.path.dirname(__file__), 'checkpoints', f'VAT-{self.data_name}-bs_{batch_size}-lr_{lr}-mt_{momentum}')
+        os.makedirs(save_dir, exist_ok=True)
         self.errors = []
-        with open(f'VAT_{self.data_name}_errors.tmp', 'w') as file: # clear temporary error record
-            pass
-        for round in range(epochs):
-            # total_error = {"encoder": 0, "decoder": 0, "noise_gen": 0}
-            batch_errors = []
-            batch_error = 0
-            for num, data in tqdm(enumerate(self.data.train_data()), total=self.data.train_num, desc=f"epochs {round+1}/{epochs}"):
+        if self.epochs == 0:
+            with open(os.path.join(save_dir, 'errors.tmp'), 'w') as file: # clear temporary error record
+                pass
+        for round in range(epochs-self.epochs):
+            epoch = round + self.epochs + 1
+
+            batch_errors = [] # total error records for each batch:
+            progress_bar = tqdm(total=self.data.train_num)
+            for num, data in enumerate(self.data.train_data()):
+                progress_bar.set_description(f"epochs {epoch}/{epochs}; batch")
+                batch_error = 0 # summed error for each batch
+
                 # conver input into one-hot vectors:
                 data = [
                     get_one_hot(data[0], self.entity_dim), # h
                     get_one_hot(data[2], self.relation_dim), # r
                     get_one_hot(data[1], self.entity_dim), # t
                     ]
-
+                
                 # get outputs
                 encoded, noise_levels, norm_noises, disturbed, translated, decoded = self.get_outputs(data)
                 desired_noises = [
@@ -90,26 +101,7 @@ class VAT:
                     for i in range(3)
                 ]
 
-                # # compute errors
-                # encoded_error = [
-                #     [disturbed[i][d] - translated[i][d] for d in range(self.latent_dim)]
-                #     for i in range(3)
-                # ]
-                # decoded_error = [ # TODO: this can be improved
-                #     [data[0][d] - decoded[0][d] for d in range(self.entity_dim)],
-                #     [data[1][d] - decoded[1][d] for d in range(self.relation_dim)],
-                #     [data[2][d] - decoded[2][d] for d in range(self.entity_dim)]
-                # ]
-                # noise_error = [ # TODO: this can be double checked
-                #     sum([1 / (disturbed[i][d] - translated[i][d]) * norm_noises[i][d] for d in range(self.latent_dim)]) / self.latent_dim
-                #     for i in range(3)
-                # ]
-                # total_error["encoder"] += sum([sum(i) for i in encoded_error])
-                # total_error["decoder"] += sum([sum(i) for i in decoded_error])
-                # total_error["noise_gen"] += sum(noise_error)
-
                 # back propagate errors
-                
                 for i in range(3):
                     if i == 0 or i == 2: # head or tail
                         batch_error += self.entity_encoder.backward(disturbed[i], translated[i])
@@ -125,31 +117,32 @@ class VAT:
                         self.relation_decoder.update_weight_changes()
                         batch_error += self.relation_noise.backward(desired_noises[i], noise_levels[i])
                         self.relation_noise.update_weight_changes()
+                    
+                # update progress bar
+                progress_bar.update(1)
 
-                # update weights if reaching batch size
+                # at the end of each batch:
                 if (num+1) % batch_size == 0 or num == self.data.train_num - 1:
+                    # update weights
                     self.entity_encoder.update_weights()
                     self.entity_decoder.update_weights()
                     self.entity_noise.update_weights()
                     self.relation_encoder.update_weights()
                     self.relation_decoder.update_weights()
                     self.relation_noise.update_weights()
-                    batch_error = batch_error/batch_size
-                    batch_errors.append(batch_error)
 
-                    # save batch error and reset
-                    with open(f'VAT_{self.data_name}_errors.tmp', 'a') as file:
-                        file.write(str(batch_error) + ', ')
-                    batch_error = 0
-                    
+                    # save batch error and report
+                    batch_errors.append(batch_error)
+                    progress_bar.set_postfix_str(f"avg batch error: {batch_error/batch_size}")
 
             ### at the end of each epoch:                    
-            # create new line in error.tmp
-            with open(f'VAT_{self.data_name}_errors.tmp', 'a') as file:
-                file.write('\n')
-
-            # refresh process bar
-            print(end='\r')
+            # save epoch total error
+            epoch_error = sum(batch_errors)
+            self.errors.append(epoch_error)
+            if abs(epoch_error) < abs(self.best[-1]):
+                self.best = (epoch, epoch_error)
+            with open(os.path.join(save_dir, 'errors.tmp'), 'a') as file:
+                file.write(f"{str(epoch_error)}\n")
 
             # save parameters
             if save == True: # mind the order
@@ -162,48 +155,64 @@ class VAT:
                     self.relation_noise.get_weights()
                 ]
 
-                save_dir = os.path.join(os.path.dirname(__file__), 'checkpoints')
-                os.makedirs(save_dir, exist_ok=True)
-
-                save_name = f'./checkpoints/VAT_{self.data_name}-lr{lr}-momen{momentum}-{epochs}.pkl'
-                previous_name = f'./checkpoints/VAT_{self.data_name}-lr{lr}-momen{momentum}-{epochs-1}.pkl'
-                if os.path.exists(os.path.join(save_dir, previous_name)):
+                save_name = f'{epoch}.pkl'
+                previous_name = f'{epoch-1}.pkl'
+                if os.path.exists(os.path.join(save_dir, previous_name)) and (epoch-1) % 10 != 0:
                     os.remove(os.path.join(save_dir, previous_name))
                 with open(os.path.join(save_dir, save_name), 'wb') as file:
                     pickle.dump(parameters, file)
 
-    def load_parameters(self, name: str):
-        save_dir = os.path.join(os.path.dirname(__file__), 'checkpoints')
-        with open(os.path.join(save_dir, name), 'rb') as file:
+        progress_bar.close()
+        self.epochs += epoch
+        print("best epoch and error:", self.best)
+
+    def load_parameters(self, bs: int, lr: float, mt: float, epoch: int):
+        save_dir = os.path.join(os.path.dirname(__file__), 'checkpoints', f'VAT-{self.data_name}-bs_{bs}-lr_{lr}-mt_{mt}')
+        with open(os.path.join(save_dir, f'{epoch}.pkl'), 'rb') as file:
             parameters = pickle.load(file)
-        self.entity_encoder.load_weights(parameters),
-        self.entity_decoder.load_weights(parameters),
-        self.entity_noise.load_weights(parameters),
-        self.relation_encoder.load_weights(parameters),
-        self.relation_decoder.load_weights(parameters),
-        self.relation_noise.load_weights(parameters)
+            assert len(parameters) == 6
+        self.entity_encoder.load_weights(parameters[0]),
+        self.entity_decoder.load_weights(parameters[1]),
+        self.entity_noise.load_weights(parameters[2]),
+        self.relation_encoder.load_weights(parameters[3]),
+        self.relation_decoder.load_weights(parameters[4]),
+        self.relation_noise.load_weights(parameters[5])
+        self.epochs = epoch
 
     def test(self):
         '''
         test on relation and entity prediction and record average rankings of expected output
         '''
         rankings = [[], [], []]
-        for data in self.data.test_data():
-            # conver input into one-hot vectors:
+        top_10_hits = [0, 0, 0]
+        for data in tqdm(self.data.test_data(), total=self.data.test_num):
+            # convert data and create one-hot vectors
+            data = [
+                data[0], data[2], data[1]
+            ]
             data_oh = [
                 get_one_hot(data[0], self.entity_dim), # h
-                get_one_hot(data[2], self.relation_dim), # r
-                get_one_hot(data[1], self.entity_dim), # t
+                get_one_hot(data[1], self.relation_dim), # r
+                get_one_hot(data[2], self.entity_dim), # t
                 ]
             
             # get outputs and record rankings
-            encoded, noise_levels, norm_noises, disturbed, translated, decoded = self.get_outputs(data)
+            encoded, noise_levels, norm_noises, disturbed, translated, decoded = self.get_outputs(data_oh, noisy=False)
             for i, prediction in enumerate(decoded):
-                confidence = prediction(data[i])
-                sorted_pred = sorted(prediction)
-                rankings[i].append(sorted_pred.index(confidence)+1)
+                confidence = prediction[data[i]]
+                sorted_pred = sorted(prediction, reverse=True)
+                rank = sorted_pred.index(confidence) + 1
+                rankings[i].append(rank)
+                if rank <= 10:
+                    top_10_hits[i] += 1 / self.data.test_num * 100
+
+        avg_rankings = [sum(rank) / len(rank) for rank in rankings]
+        print(avg_rankings)
+        print(top_10_hits)
+
+        return rankings
                 
-    def get_outputs(self, data: Sequence):
+    def get_outputs(self, data: Sequence, noisy=True):
         '''
         get full outputs of the model
         input: data - (h, r, t) in one-hot vectors
@@ -222,10 +231,13 @@ class VAT:
             [random.normalvariate() for _ in range(self.latent_dim)] # noises for each vector
             for _ in range(3)
             ]
-        disturbed = [ # noisy representations
-            [encoded[i][d] + noise_levels[i][0] * norm_noises[i][d] for d in range(self.latent_dim)]
-            for i in range(3)
-        ]
+        if noisy:
+            disturbed = [ # noisy representations
+                [encoded[i][d] + noise_levels[i][0] * norm_noises[i][d] for d in range(self.latent_dim)]
+                for i in range(3)
+            ]
+        else:
+            disturbed = encoded
         translated = [ # predicted latent representations
             [disturbed[2][d] - disturbed[1][d] for d in range(self.latent_dim)], # h
             [disturbed[2][d] - disturbed[0][d] for d in range(self.latent_dim)], # r
@@ -238,6 +250,7 @@ class VAT:
         ]
 
         return encoded, noise_levels, norm_noises, disturbed, translated, decoded 
+
 
 
 def get_dims(input_dim: int, output_dim: int, layer_num: int) -> Sequence:
