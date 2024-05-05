@@ -16,14 +16,22 @@ class VAT:
         self.entity_dim = self.data.entity_num
         self.relation_dim = self.data.relation_num
         self.latent_dim = ceil((dim_map(self.entity_dim) + dim_map(self.relation_dim)) / 2)
+        print(f"start building VAT with {self.entity_dim} entities, {self.relation_dim} relations, and latent dimension {self.latent_dim}.")
 
         # make nets; ignore joint first
+        print("setting entity encoder...")
         self.entity_encoder = BPNet(get_dims(self.entity_dim, self.latent_dim, layer_num))
+        print("setting entity encoder...")
         self.entity_decoder = BPNet(get_dims(self.latent_dim, self.entity_dim, layer_num))
+        print("setting relation encoder...")
         self.relation_encoder = BPNet(get_dims(self.relation_dim, self.latent_dim, layer_num))
+        print("setting relation encoder...")
         self.relation_decoder = BPNet(get_dims(self.latent_dim, self.relation_dim, layer_num))
+        print("setting disturbers...")
         self.entity_noise = BPNet(get_dims(self.entity_dim, 1, 4))
         self.relation_noise = BPNet(get_dims(self.entity_dim, 1, 4))
+        
+        print("done initialization.")
     
     def train_entity(self, position: str="tail", epochs=500, batch_size=100, lr=0.01):
         '''
