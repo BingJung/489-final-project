@@ -36,7 +36,8 @@ class Connection:
         self.weight_change += learning_rate * self.recipient.error * self.sender.activation
         return self.weight_change
 
-    def update_weight(self, momentum = 0):
+    def update_weight(self, momentum = 0, batch_size = 1):
+        self.weight_change /= batch_size
         self.weight += self.weight_change
         self.weight_change *= momentum
         return self.weight

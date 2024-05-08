@@ -1,0 +1,23 @@
+TransE:
+batch size 20
+learning rate 0.006
+best 
+FB15K: (20000, 0.015)
+FB15K237 / WN18RR: (~11500, 1e-6 / 1e-8)
+
+
+VAT:
+batch size 20
+learning rate 0.006
+momentum 0.001
+
+
+VATLight:
+10.pkl:
+batch size 20
+learning rate 0.006
+momentum 0
+
+after 10.pkl:
+learning rate 0.001
+remove noise

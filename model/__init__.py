@@ -1,5 +1,5 @@
-from .BPNet import BPNet
-from .AutoTranscoder import VAT
+from .VAT import VAT
+from .VATLight import VATLight
 from .TransE import TransE
 
-__all__ = [BPNet, VAT, TransE]
+__all__ = [VAT, VATLight, TransE]

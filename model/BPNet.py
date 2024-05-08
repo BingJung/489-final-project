@@ -6,7 +6,7 @@ from typing import Sequence
 from itertools import product, pairwise # "pairwise" requires python 3.10 or later
 
 class BPNet:
-    def __init__(self, units_nums: list, learning_rate = 0.01, momentum = 0) -> None:
+    def __init__(self, units_nums: list, learning_rate=0.01, momentum=0) -> None:
         '''
         input: units_nums - a list specifying number of units in each layer of the network;
                             length of the list will be the number of layeres of the network
@@ -77,22 +77,28 @@ class BPNet:
         
         return global_error
 
-    def update_weight_changes(self):
+    def update_weight_changes(self, learning_rate=None):
         '''
         update expected change of each connection in the network
         '''
         for weight_layer in self.connections_forward:
             for conn in weight_layer.values():
-                conn.update_weight_change(self.learning_rate)
+                if learning_rate is None:
+                    conn.update_weight_change(self.learning_rate)
+                else:
+                    conn.update_weight_change(learning_rate)
 
-    def update_weights(self):
+    def update_weights(self, batch_size=1, momentum=None):
        '''
        update weight of each connection
        (with momentum wrt the weight change in last update)
        '''
        for weight_layer in self.connections_forward:
             for conn in weight_layer.values():
-                conn.update_weight(self.momentum) 
+                if momentum is None:
+                    conn.update_weight(self.momentum, batch_size) 
+                else: 
+                    conn.update_weight(momentum, batch_size) 
     
     def set_learning_rate(self, learning_rate) -> None:
         self.learning_rate = learning_rate

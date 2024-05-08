@@ -1,19 +1,28 @@
-from model import VAT, TransE
+from model import VAT, TransE, VATLight
 
 import fire
 
-def main(model: str, data: str, epochs=100, batch_size: int = 20, lr=0.01, momentum=0, checkpoint: int=None, save=True):
-    assert model in ["VAT", "TransE"]
+def main(model: str, data: str, epochs=100, mode: tuple=None, checkpoint: int=None, save=True):
+    assert model in ["VAT", "TransE", "VATLight"]
+    data = data.lower()
 
-    if model == "VAT":
-        model = VAT(data)
-    else: # "TransE"
-        model = TransE(data)
+    match model:
+        case "VAT":
+            model = VAT(data)
+        case "TransE":
+            model = TransE(data)
+        case "VATLight":
+            if data == "fb15k":
+                model = VATLight(data, './model/checkpoints/TransE-fb15k/20000.pkl')
+            else:
+                model = VATLight(data, f'./model/checkpoints/TransE-{data}/11500.pkl')
 
     if checkpoint is not None:
-        model.load_parameters(batch_size, lr, momentum, checkpoint)
+        model.load_parameters(checkpoint)
 
-    model.train(epochs = epochs, batch_size = batch_size, lr = lr, momentum = momentum, save = save)
+    if mode is None:
+        mode = (20, 0.006, 0)
+    model.train(epochs, *mode, save)
 
 
 if __name__ == "__main__":
